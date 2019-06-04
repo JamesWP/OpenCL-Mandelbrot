@@ -19,13 +19,13 @@ namespace mandelbrot {
 	};
 	struct host_output {
 		size_t width, height;
-		std::vector<unsigned int> out;
+		std::vector<uint32_t> out;
 
 		host_output(const host_input& input);
 		host_output(size_t width, size_t height);
 
-		const unsigned int& at(size_t x, size_t y) const { return out[y*width + x]; }
-		unsigned int& at(size_t x, size_t y) { return out[y*width + x]; }
+		const uint32_t& at(size_t x, size_t y) const { return out[y*width + x]; }
+		uint32_t& at(size_t x, size_t y) { return out[y*width + x]; }
 	};
 }
 namespace util {

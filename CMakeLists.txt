@@ -29,6 +29,16 @@ target_link_libraries(MandelbrotLib PUBLIC ${LIBGD_LIBRARY} ${OpenCL_LIBRARY})
 add_executable (Mandelbrot main.m.cpp)
 target_link_libraries(Mandelbrot PRIVATE MandelbrotLib)
 
+# OpenCL Kernel source
+add_custom_target(MandelbrotKernel)
+add_custom_command(
+        TARGET MandelbrotKernel POST_BUILD
+		DEPENDS ${CMAKE_SOURCE_DIR}/mandelbrot.cl
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/mandelbrot.cl
+                ${CMAKE_CURRENT_BINARY_DIR}/mandelbrot.cl)
+add_dependencies(Mandelbrot MandelbrotKernel)
+
 # Unit test executable
 add_executable(MandelbrotUnit raster.g.cpp gpu_compute.g.cpp)
 target_link_libraries(MandelbrotUnit PUBLIC MandelbrotLib GTest::GTest GTest::Main)

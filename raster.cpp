@@ -19,28 +19,18 @@ void raster::write_output(std::string filename,
 void raster::write_output(std::ostream& out,
 	const mandelbrot::host_output& output) {
 	
-	gdImagePtr im = gdImageCreate(output.width, output.height);
-
-	int black = gdImageColorAllocate(im, 0, 0, 0);
-
-	// black is unused, it is the default color
-	(void)black;
-
-	int white = gdImageColorAllocate(im, 255, 255, 255);
+	gdImagePtr im = gdImageCreateTrueColor(output.width, output.height);
 
 	for (size_t y = 0; y < output.height; y++)
 	{
 		for (size_t x = 0; x < output.width; x++)
 		{
 			unsigned int color = output.at(x, y);
-			if (color != 0) {
-				gdImageSetPixel(im, x, y, white);
-			}
+			gdImageSetPixel(im, x, y, color);
 		}
 	}
 	
 	ostreamIOCtx outCtx{ out };
 	gdImagePngCtx(im, &outCtx);
-
 	gdFree(im);
 }

@@ -1,2 +1,4 @@
 bld/
 .vs
+/exm_opencl_mandelbrot_x64_windows
+/intel_mandelbrot_kernel.cl
