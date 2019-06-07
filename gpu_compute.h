@@ -18,7 +18,7 @@ namespace compute {
 	private:
 		std::unique_ptr<gpu_context_impl> _impl;
 	public:
-		gpu_context();
+		gpu_context(size_t num_reals, size_t num_imags);
 		~gpu_context();
 
 		gpu_context_impl& impl() { return *_impl;  }

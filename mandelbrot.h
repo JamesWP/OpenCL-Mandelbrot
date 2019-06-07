@@ -6,11 +6,8 @@
 namespace mandelbrot {
 	struct input_spec {
 		std::complex<float> center;
-		float imag_height;
-		float real_width;
-		int itterations;
-		float imag_step;
-		float real_step;
+		size_t output_width, output_height;
+		float zoom_level{ 0.0 };
 	};
 	struct host_input {
 		std::vector<float> reals, imags;
@@ -29,18 +26,17 @@ namespace mandelbrot {
 	};
 }
 namespace util {
-	inline std::vector<float> gen_values(float middle, float span, float step)
+	inline std::vector<float> gen_values(float middle, size_t steps, float zoom_level)
 	{
 		std::vector<float> out;
+		out.reserve(steps);
 
-		out.clear();
-		const int size = (int)(span / step);
-		out.reserve(size);
+		float step = 0.002 * pow(10.0, -zoom_level);
 
-		const float half = span / 2.0f;
-		for (float min = middle - half, max = middle + half; min < max; min += step)
-		{
-			out.push_back(min);
+		size_t mid_steps = steps / 2;
+		float begin = middle - mid_steps * step;
+		for (size_t i = 0; i < steps; i++){
+			out.push_back(begin + i * step);
 		}
 
 		return out;
@@ -48,8 +44,8 @@ namespace util {
 }
 
 inline mandelbrot::host_input::host_input(const mandelbrot::input_spec& spec)
-	: imags(util::gen_values(spec.center.imag(), spec.imag_height, spec.imag_step))
-	, reals(util::gen_values(spec.center.real(), spec.real_width, spec.real_step))
+	: imags(util::gen_values(spec.center.imag(), spec.output_height, spec.zoom_level))
+	, reals(util::gen_values(spec.center.real(), spec.output_width, spec.zoom_level))
 {}
 
 inline mandelbrot::host_output::host_output(const mandelbrot::host_input& input)

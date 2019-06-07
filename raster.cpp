@@ -6,7 +6,7 @@
 
 void raster::write_output(std::string filename,
 	const mandelbrot::host_output& output) {
-	std::fstream outStream{ filename, std::ios_base::out | std::ios_base::binary };
+	std::fstream outStream{ filename + ".tiff", std::ios_base::out | std::ios_base::binary };
 	
 	if (!outStream) {
 		throw std::exception{ "unable to open file" };
@@ -31,6 +31,6 @@ void raster::write_output(std::ostream& out,
 	}
 	
 	ostreamIOCtx outCtx{ out };
-	gdImagePngCtx(im, &outCtx);
+	gdImageTiffCtx(im, &outCtx);
 	gdFree(im);
 }

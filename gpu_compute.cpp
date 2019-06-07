@@ -5,6 +5,10 @@
 #include <complex>
 #include <array>
 #include <fstream>
+#include <chrono>
+
+// TODO: remove
+#include <iostream>
 
 #include <CL/cl.h>
 
@@ -109,11 +113,32 @@ namespace impl {
 }
 
 namespace compute {
+
+	class gpu_mandelbrot_context {
+	public:
+		// input
+		impl::gpu_buffer<float, impl::mem::r> device_reals;
+		impl::gpu_buffer<float, impl::mem::r> device_imags;
+
+		// output
+		impl::gpu_image<impl::mem::w> device_result;
+
+		// compute
+		impl::gpu_queue queue;
+		impl::gpu_mandelbrot_program program;
+		impl::gpu_mandelbrot_kernel kernel;
+
+		gpu_mandelbrot_context(cl_context context, cl_device_id deviceId, size_t num_reals, size_t num_imags);
+
+		void compute(compute::compute_io_data& data);
+	};
+
 	class gpu_context_impl : private impl::CLOwner<cl_context> {
 	public:
 		cl_device_id deviceId{ 0 };
+		std::unique_ptr<compute::gpu_mandelbrot_context> mand_ctx;
 
-		gpu_context_impl();
+		gpu_context_impl(size_t num_reals, size_t num_imags);
 
 		cl_context context() { return obj(); }
 	};
@@ -283,11 +308,11 @@ void impl::gpu_mandelbrot_kernel::run(cl_command_queue queue,
 		throw std::runtime_error("Kernel run error: " + std::to_string(error));
 	}
 
-	clFlush(queue);
+	clFinish(queue);
 }
 
 // gpu context implementation, details
-compute::gpu_context_impl::gpu_context_impl()
+compute::gpu_context_impl::gpu_context_impl(size_t num_reals, size_t num_imags)
 {
 	cl_uint platformIdCount = 0;
 	clGetPlatformIDs(0, nullptr, &platformIdCount);
@@ -335,49 +360,75 @@ compute::gpu_context_impl::gpu_context_impl()
 	}
 
 	obj() = context;
+
+	mand_ctx = std::make_unique<compute::gpu_mandelbrot_context>(context, deviceId, num_reals, num_imags);
+}
+
+compute::gpu_mandelbrot_context::gpu_mandelbrot_context(cl_context context, cl_device_id deviceId, size_t num_reals, size_t num_imags)
+    // Create input buffers
+	: device_reals{ context, num_reals }
+	, device_imags{ context, num_imags }
+	// Create output buffers
+	, device_result{ context, num_reals, num_imags }
+	// Create context for computation
+	, queue{ context, deviceId }
+	, program{ context, deviceId, "mandelbrot.cl" }
+	, kernel{ program.program() }
+{
+}
+
+template<typename TimePoint>
+auto microsBetween(const TimePoint& a, const TimePoint& b)
+{
+	TimePoint i = a;
+	TimePoint j = b;
+
+	if (i > j) {
+		std::swap(i, j);
+	}
+
+	return std::chrono::duration_cast<std::chrono::microseconds>(j - i).count();
 }
 
 // gpu context, client interface
-compute::gpu_context::gpu_context() :_impl(std::make_unique<gpu_context_impl>()) {}
+compute::gpu_context::gpu_context(size_t num_reals, size_t num_imags)
+{
+	auto start = std::chrono::high_resolution_clock::now();
+	_impl = std::make_unique<gpu_context_impl>(num_reals, num_imags);
+	auto finish = std::chrono::high_resolution_clock::now();
+	std::cout << "Allocation and compile time (us): " << microsBetween(start, finish) << '\n';
+}
+
 compute::gpu_context::~gpu_context() = default;
 
 // mandelbrot computation
-namespace {
-	void compute_impl(compute::compute_io_data& data, compute::gpu_context_impl&);
-}
 
 void compute::compute(compute::compute_io_data& data, compute::gpu_context& context)
 {
-	compute_impl(data, context.impl());
+	context.impl().mand_ctx->compute(data);
 }
 
-namespace {
-	// mandelbrot implementation
-	void compute_impl(compute::compute_io_data& data, compute::gpu_context_impl& impl)
-	{
-		size_t num_reals = data.input.reals.size();
-		size_t num_imags = data.input.imags.size();
+void compute::gpu_mandelbrot_context::compute(compute::compute_io_data& data)
+{
+	auto start = std::chrono::high_resolution_clock::now();
 
-		// Create input buffers
-		impl::gpu_buffer<float, impl::mem::r> device_reals{ impl.context(), num_reals };
-		impl::gpu_buffer<float, impl::mem::r> device_imags{ impl.context(), num_imags };
+	// Copy input
+	device_reals.load(queue.queue(), data.input.reals.data(), device_reals.size());
+	device_imags.load(queue.queue(), data.input.imags.data(), device_imags.size());
 
-		// Create output buffers
-		impl::gpu_image<impl::mem::w> device_result{ impl.context(), num_reals, num_imags };
+	auto calculationStart = std::chrono::high_resolution_clock::now();
 
-		// Create context for computation
-		impl::gpu_queue queue{ impl.context(), impl.deviceId };
-		impl::gpu_mandelbrot_program program{ impl.context(), impl.deviceId, "mandelbrot.cl" };
-		impl::gpu_mandelbrot_kernel kernel{ program.program() };
+	// Calculate
+	kernel.run(queue.queue(), device_reals, device_imags, device_result);
 
-		// Copy input
-		device_reals.load(queue.queue(), data.input.reals.data(), num_reals);
-		device_imags.load(queue.queue(), data.input.imags.data(), num_imags);
+	auto copyBackStart = std::chrono::high_resolution_clock::now();
 
-		// Calculate
-		kernel.run(queue.queue(), device_reals, device_imags, device_result);
+	// Copy result
+	device_result.read(queue.queue(), data.output.out);
 
-		// Copy result
-		device_result.read(queue.queue(), data.output.out);
-	}
+	auto finish = std::chrono::high_resolution_clock::now();
+
+	std::cout << "Copy to time (us): " << microsBetween(start, calculationStart) << '\n';
+	std::cout << "Kernel run time (us): " << microsBetween(calculationStart, copyBackStart) << '\n';
+	std::cout << "Copy back time (us): " << microsBetween(copyBackStart, finish) << '\n';
 }

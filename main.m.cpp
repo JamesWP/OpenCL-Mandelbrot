@@ -10,19 +10,28 @@ void pause();
 int main(int argc, char* argv[])
 {
 	try {
-		mandelbrot::input_spec spec;
-		spec.center = { -0.5f, 0.0f };
-		spec.imag_height = 2.0f;
-		spec.real_width = 2.0f;
-		spec.imag_step = 0.0005f;
-		spec.real_step = 0.0005f;
 
-		compute::compute_io_data data{ spec };
-		compute::gpu_context context;
+		const size_t output_width = 1000;
+		const size_t output_height = 1000;
 
-		compute::compute(data, context);
+		compute::gpu_context context{ output_width, output_height };
 
-		raster::write_output("out2.png", data.output);
+		for (size_t i = 0; i < 100; i++) {
+			mandelbrot::input_spec spec;
+
+			spec.center = { -0.743643887037158704752191506114774f, 0.131825904205311970493132056385139f };
+			spec.output_width = output_width;
+			spec.output_height = output_height;
+			spec.zoom_level = (i/100.0) * 5.0 + 1.0;
+
+			compute::compute_io_data data{ spec };
+
+			compute::compute(data, context);
+
+			raster::write_output("out" + std::to_string(i), data.output);
+		}
+
+		pause();
 	}
 	catch (const std::exception& exception) {
 		std::cerr << "Error occured when running " << argv[0] << '\n';
